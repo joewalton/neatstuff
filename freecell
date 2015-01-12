@@ -1,0 +1,794 @@
+
+// Author: Joseph Walton
+// This project generates a playable game of Free Cell.
+
+
+#include <iostream>
+#include <cmath>
+#include <cstring>
+#include <string>
+#include <string.h>
+#include <time.h>
+#include <cstdlib>
+
+using namespace std;
+
+// T_SIZE refers to the number of tableau piles. T_SIZE_1 is used because some of
+// the functions need an int and not a double to operate properly. Because of this
+// conversion, the compiler will give a warning.
+
+// T_CARDS_1 refers to the number of cards in each pile of the first half of the
+// tableau piles. A ceiling operation is done to round up a digit if there is
+// any remainder when MAX_CARDS is divided by T_SIZE. T_CARDS_2 is then the number
+// of cards in each pile of the second half of tableau piles. It is only used if
+// the MAX_CARDS_PER_SUIT constant is an odd number. 
+const int MAX_SUITS = 4;
+const int MAX_CARDS_PER_SUIT = 13;
+const int MAX_CARDS = MAX_CARDS_PER_SUIT * MAX_SUITS;
+const double T_SIZE = 8.0;
+const int T_SIZE_1 = T_SIZE;
+const int T_CARDS_1 = ceil(MAX_CARDS / T_SIZE);
+const int T_CARDS_2 = T_CARDS_1 - 1;
+// CELL_SIZE is the number of cells in the game.
+const int CELL_SIZE = 4;
+// FOUND_PILES is the number of foundation piles in the game.
+const int FOUND_PILES = 4;
+
+
+// This is the card generation class. It is used to generate the cards and shuffle
+// them. 
+class CardGen
+{
+public:
+    CardGen();
+    
+    int getCards();
+    void shuffle();
+    void swap (string& a, string& b);
+   
+    void initTableau();
+    void getTableauNum();
+    void printTableau();
+    
+    void cardManip(int takeCard, int placeCard, CardGen& cells);
+    
+    void initCells();
+    void fillCells(int takeCard, int placeCard, CardGen& game1);
+    void printCells();
+    
+    void initFoundations();
+    void fillFoundations(int takeCard, int placeCard, CardGen& game1, CardGen& cells);
+    void printFoundations();
+    
+    void checkWin(CardGen cells);
+
+private:
+    // the 'cards' array stores all of the cards.
+    string cards[MAX_SUITS][MAX_CARDS_PER_SUIT];
+    // the 'tableau' array stores the cards in the format of the 
+    // tableau piles. 
+    string tableau[T_SIZE_1][MAX_CARDS_PER_SUIT];
+    // the 'cell' array stores the data for the cell information.
+    string cell[CELL_SIZE];
+    // the 'foundations' array stores the data for the foundation info.
+    string foundations[FOUND_PILES];
+    
+    int NumCardsInTableau[MAX_CARDS_PER_SUIT];
+    int takeCard, placeCard;
+};
+
+
+int main()
+{  
+    // takeCard and placeCard are the ints given by the player to determine which
+    // cards to take and to place.
+    int takeCard;
+    int placeCard;
+    
+    // The next few lines create the initial gameboard. They are only used once
+    // in the game, to start it off.
+    CardGen game1;
+    game1.getCards(); 
+    game1.shuffle();
+    
+    game1.getTableauNum();
+    
+    CardGen cells;
+    cells.initCells(); 
+    
+    CardGen foundationPiles;
+    foundationPiles.initFoundations(); 
+
+    // while cin is not in the fail state, a loop is made to allow the player to
+    // continuosly enter moves either until he or she resigns or until victory
+    // is reached.
+    while ( ! cin.fail())
+    {   
+      // These functions are printed off to update the gameboard each time the 
+      // player enters his place and take cards. 
+      foundationPiles.printFoundations(); 
+      cout << endl << endl;
+      game1.printTableau(); 
+      cout << endl;
+      cells.printCells(); 
+      cout << endl;
+      cout << endl;
+      
+      
+      
+      cout << "From where do you wish to take a card? ( 1-8, 10-40, 100-400, 0 to resign): ";
+      cin >> takeCard;
+      cout << endl;
+      
+      // if the player enters 0, the game will exit.
+      if (takeCard == 0)
+      {
+          cout << "Better luck next time!" << endl;
+          exit(0);
+      }
+      
+      cout << "Where do you want to place the card? ( 1-8, 10-40, 100-400, 0 to resign): ";
+      cin >> placeCard;
+      cout << endl;
+      
+      if (placeCard == 0)
+      {
+          cout << "Better luck next time!" << endl;
+          exit(0);
+      }
+      
+      // This if statement ensures that the player does not attempt to take
+      // cards from the foundation piles.
+      if(takeCard >= 100 && takeCard <= 400)
+      {
+          cout << "You cannot take cards from the foundation piles!" << endl;
+      }
+      else
+      { 
+      // If the player wants to put a card in the foundation piles, this function
+      // is used.
+      if ( placeCard >= 100 && placeCard <= 400)
+      {
+      foundationPiles.fillFoundations(takeCard, placeCard, game1, cells);
+      }
+      // If the player wants to put a card in the cells, this function is used.
+      else if(placeCard >= 10 && placeCard <= 40)
+      {
+      cells.fillCells(takeCard, placeCard, game1);
+      }     
+      // If the player wants to move cards about the tableau piles, this function
+      // is used.
+      else if( placeCard >= 1 && placeCard <= 8)
+      {
+      game1.cardManip(takeCard, placeCard, cells);
+      }
+      // Any other values the player enters return an "incorrect entry" message.
+      else
+      {
+          cout << "Incorrect entry!" << endl;
+      }
+      // At the end of each turn, this function checks to see if the victory condition
+      // has been met or not. 
+      game1.checkWin(cells); 
+    }
+    }
+    cout << endl;
+      
+}  
+
+// This is the default constructor. It initializes the 'cards' array. 
+CardGen::CardGen()
+{
+           for (int suits = 0; suits < MAX_SUITS; suits++)
+           {              
+               for (int c = 0; c < MAX_CARDS_PER_SUIT; c++)
+               {
+                   cards[suits][c] = "0";
+               } 
+           }            
+    
+}
+
+
+// Initializes the 'tableau' array.
+void CardGen::initTableau()
+{
+    for (int t = 0; t < T_SIZE_1; t++)
+    {
+        for (int r = 0; r < MAX_CARDS_PER_SUIT; r++)
+        {
+            tableau[t][r] = "0";
+        }
+    }
+}
+
+// This function is used to generate the cards in correct card order. A maximum
+// of 16 cards per suit can be generated. More can be generated if names are 
+// given to card values exceeding the 16th card. 
+int CardGen::getCards()
+{   
+    // normal card ranks would end at 'K' but for this exercise the ranks can be
+    // extended further 
+    string ranks = "A23456789TJQKEOW";
+    // C = clubs, S = spades, D = diamonds, and H = hearts. 
+    string suit = "CSDH";
+                        
+           for (int suits = 0; suits < MAX_SUITS; suits++)
+           {
+               for (int r = 0; r < MAX_CARDS_PER_SUIT; r++)             
+               {       
+                    {
+                        cards[suits][r] = ranks.substr(r, 1) + suit.substr(suits, 1);
+                    }
+               }               
+           }            
+     
+}
+
+// This is the shuffling function. A simple swap function is utilized here
+// to allow the shuffling. The ranks are first shuffled, and then the suits
+// are seperately shuffled. The computer's clock is used to seed the random
+// numbers. srand is put outside of the loops because when it is inside, the
+// suits become less 'random', and the same suit appears many more times in a row
+// than if srand is outside the loops or not used at all. 
+void CardGen::shuffle()
+{
+           srand((unsigned)time(NULL));
+           for (int suits = 0; suits < MAX_SUITS; suits++)
+           {      
+               for (int c = 0; c < MAX_CARDS_PER_SUIT; c++)
+               {
+                  int a = rand() % (MAX_CARDS_PER_SUIT - c);
+                  int b = rand() % (MAX_SUITS - suits);
+                                               
+                  swap(cards[suits][c], cards[suits][a]);     
+                  swap(cards[suits][c], cards[b][c]);
+               }
+           }                      
+}
+
+// A simple swap function. Used in the 'shuffle' function. 
+void CardGen::swap(string& a, string& b ) 
+{
+    string temp;
+    temp = a;
+    a = b;
+    b = temp;
+}
+
+// This function arranges the shuffled cards in the number of tableau piles specified.
+// By default, there are 8 piles.
+void CardGen::getTableauNum()
+{
+   int counter = 0;
+   int rank = 0;
+   int tab = 0;
+   int totalCards = 0;    
+   
+   // This if statement is used to put x amount of cards in each pile. It is
+   // used if T_CARDS_1 and T_CARDS_2 are not possible with the card and tableau amount
+   // combination. Or more simply, if MAX_CARDS_PER_SUIT is even (assuming that
+   // the number of tableau piles are even as well).
+ 
+   if( (T_CARDS_1 * (T_SIZE_1 / 2)) + (T_CARDS_2 * (T_SIZE_1 / 2)) != MAX_CARDS )
+   {
+       for (int s = 0; s < MAX_SUITS; s++)
+       {
+          for (int c = 0; c < MAX_CARDS_PER_SUIT; c++)
+          {
+              if ( counter == MAX_CARDS / T_SIZE_1 )
+              {
+                  // This array is used to keep record of the number of total cards
+                  // in each tableau. It is used later in the cardManip function.
+                  NumCardsInTableau[tab] = T_CARDS_1 - 1;
+                  tab++;
+                  counter = 0;
+                  rank = 0;
+              }
+              NumCardsInTableau[tab] = T_CARDS_1 - 1;
+              tableau[tab][rank] = cards[s][c];   
+              rank++;
+              counter++;
+          }
+      }
+   }   
+    // This else statement is used if the number of cards and tableau combination
+   // allow the first half of the tableau piles to have x amount of cards each,
+   // while the last half have x - 1 amount of cards each (Or,
+   // more simply, if MAX_CARDS_PER_PILE is odd [assuming that the tableau
+   // piles are even]). 
+   // I realize it would have been simpler to use if (MAX_CARDS_PER_SUIT % 2 == 0) 
+   // to find if it is an odd number or not, but I want to keep it abstract enough
+   // to allow different numbers of tableau piles as well.
+   else
+   {
+   for (int s = 0; s < MAX_SUITS; s++)
+   {
+       for (int c = 0; c < MAX_CARDS_PER_SUIT; c++)
+       {
+           // Used to calculate the number of cards in the first half of the 
+           // piles.
+           if ( totalCards == counter + T_CARDS_1 && totalCards <= T_CARDS_1 * (T_SIZE_1 / 2))
+           {
+               counter = counter + T_CARDS_1;
+               rank = 0;
+               NumCardsInTableau[tab] = T_CARDS_1 - 1;
+               tab++;
+           }
+           // Used to calculate the number of cards in the second half of the
+           // piles. 
+           else if ( totalCards == counter + T_CARDS_2 && totalCards > T_CARDS_1 * (T_SIZE_1 / 2))
+           {
+               counter = counter + T_CARDS_2;
+               rank = 0;
+               NumCardsInTableau[tab] = T_CARDS_2 - 1; 
+               tab++;                                        
+           }
+           
+           tableau[tab][rank] = cards[s][c];   
+           rank++;
+           totalCards++;
+           NumCardsInTableau[tab] = T_CARDS_2 -1;
+        }
+   }
+   }
+     
+ 
+     
+   
+}
+
+// Prints the tableau piles. 
+void CardGen::printTableau()
+{
+    string num = "1234567890";
+    
+    for (int tab = 0; tab < T_SIZE_1; tab++)
+    {
+        cout << num.substr(tab, 1) << "." << " ";
+        for (int rank = 0; rank < MAX_CARDS_PER_SUIT; rank++)
+        {
+            cout << " " << tableau[tab][rank];
+        }
+        cout << endl;
+    }
+}
+
+// This function is used to manipulate cards on the board. It is used when the 
+// player is going to place a card on a tableau pile. The card can either be 
+// from another tableau pile, or from one of the cells.
+void CardGen::cardManip(int takeCard, int placeCard, CardGen& cells)
+{
+    // This if statement is used if the player attempts to take a card from
+    // an empty tableau pile.
+    if(NumCardsInTableau[takeCard - 1] == -1)
+    {
+        cout << "There are no cards in that cell to take!" << endl;
+    }
+    else
+    {
+    // This if statement is used if the player is putting a card onto an empty
+    // tableau pile.
+    if(NumCardsInTableau[placeCard - 1] == -1)
+    {
+        // nested if statement if the card is coming from one of the cells.
+        if (takeCard >= 10 && takeCard <= 40)
+        {
+            tableau[placeCard - 1][0] = cells.cell[takeCard / 10 - 1];
+            NumCardsInTableau[placeCard - 1] = NumCardsInTableau[placeCard - 1] + 1;
+            cells.cell[takeCard / 10 - 1] = "___";            
+        }
+        else
+        {
+        int take = NumCardsInTableau[takeCard - 1];
+        tableau[placeCard - 1][0] = tableau[takeCard - 1][take];
+        NumCardsInTableau[takeCard - 1] = NumCardsInTableau[takeCard - 1] - 1;
+        NumCardsInTableau[placeCard - 1] = NumCardsInTableau[placeCard - 1] + 1;
+        tableau[takeCard - 1][take] = '\0'; 
+        }
+    }   
+    // This else statement is used if empty tableaus are not being dealt with.
+    else
+    { 
+    // 'rankNumTake' is the rank of the card the player is taking, after being 
+    // converted to an int. This accomodates for cards that use a letter instead
+    // of a digit.
+        
+    // 'take' is the number of cards in the tableau pile a card is being taken from.
+    // It is used for convienence so 'NumCardsInTableau[takeCard - 1] doesn't have
+    // to be written many times.
+    string ranks = "A23456789TJQKEOW";   
+    int rankNumTake = 0;
+    int take = NumCardsInTableau[takeCard - 1]; 
+    // 'takeSuit' is the suit of the card being taken (while still in string form).
+    // 'takeRank' is the rank of the card being taken.
+    string takeSuit;
+    string takeRank;
+    // If the card is being taken from the cells, this if statement gets the card,
+    // suit, and rank. 
+    if ( takeCard >= 10 && takeCard <= 40)
+    {  
+        takeSuit = cells.cell[takeCard / 10 - 1];
+        takeRank = cells.cell[takeCard / 10 - 1];      
+        takeSuit = takeSuit.at(1);
+        takeRank = takeRank.at(0);  
+        // This is used to convert the rank to a digit. The string version of the
+        // rank is taken and searched for in the string 'ranks'. The position of the
+        // character in the string is returned, and this position becomes the new rank.
+        // For example, if the rank of the card is Q, the string 'ranks' is searched
+        // for the occurrence of 'Q'. When it is found, the position of Q from the 
+        // string is returned, which is 11. 
+        rankNumTake = ranks.find(takeRank);
+    }
+    // Else if the card is being taken from the tableau piles. Same rules as the 
+    // previous if statement. However, takeSuit and takeRank are gotten from the
+    // last card of the tableau pile being taken from. 
+    else
+    {
+    takeSuit = tableau[takeCard - 1][take];
+    takeRank = tableau[takeCard - 1][take];
+    takeSuit = takeSuit.at(1);
+    takeRank = takeRank.at(0);
+    rankNumTake = ranks.find(takeRank);
+    }
+    
+    // These are the same as the above rules, but the information is gotten for last
+    // card on the tableau a card is being put onto. 
+    int place = 0; 
+    place = NumCardsInTableau[placeCard - 1];
+    string placeSuit = tableau[placeCard - 1][place];
+    string placeRank = tableau[placeCard - 1][place];
+    placeSuit = placeSuit.at(1);
+    placeRank = placeRank.at(0);
+    int rankNumPlace;
+    rankNumPlace = ranks.find(placeRank);    
+    
+    // this if statement prevents the player from putting cards that are not in
+    // descending sequential order on top of each other.
+    if ( rankNumTake != rankNumPlace - 1 )
+    {
+        cout << "The cards must be in descending sequential order!" << endl << endl;
+    }
+     // These if statements keep the player from putting suits of the same color
+    // on top of each other. The string 'placeSuit' and 'takeSuit' are both one
+    // character long, and they are the letter representing the suit for the last
+    // card in the piles. 
+    else if ( (takeSuit == "C" || takeSuit == "S") && (placeSuit == "S" || placeSuit == "C"))
+    {
+        cout << "You can't put black on black!" << endl << endl;
+    }
+    else if ( (takeSuit == "H" || takeSuit == "D") && (placeSuit == "D" ||placeSuit == "H"))
+    {
+        cout << "You can't put red on red!" << endl << endl;
+    }      
+    // The actions below update the number of cards in each tableau as the player
+    // moves the cards about. When the player takes a card, the card number is
+    // subtracted by one from that pile. When the player puts a card on a tableau pile, the number
+    // is increased by one for that pile. After the card is placed onto its new pile,
+    // the duplicate of the card still on the take pile is replaced with \0.    
+    else
+    {
+        // This if statement is used if the card that was taken was from the
+        // cells.
+      if (takeCard >= 10 && takeCard <= 40)
+      {
+        tableau[placeCard - 1][place + 1] = cells.cell[takeCard / 10 - 1];
+        NumCardsInTableau[placeCard - 1] = NumCardsInTableau[placeCard - 1] + 1; 
+        cells.cell[takeCard / 10 - 1] = "___";
+      }
+      // This else statement is used if the card that was taken was from the 
+      // tableau piles.
+      else
+      {
+        tableau[placeCard - 1][place + 1] = tableau[takeCard - 1][take];
+        NumCardsInTableau[placeCard - 1] = NumCardsInTableau[placeCard - 1] + 1;
+        NumCardsInTableau[takeCard - 1] = NumCardsInTableau[takeCard - 1] - 1;    
+        tableau[takeCard - 1][take] = '\0';    
+      }
+    }
+    }
+    }
+}
+
+// This initializes the 'cells' array.
+void CardGen::initCells()
+{
+    for (int c = 0; c < CELL_SIZE; c++)
+    {
+        cell[c] = "___";
+    }
+}
+
+// This function gets the information for the cells. It is used if the
+// player is placing a card onto a cell. 
+void CardGen::fillCells(int takeCard, int placeCard, CardGen& game1)
+{    
+    // If the player tries to take a card from an empty cell.
+    if(game1.NumCardsInTableau[takeCard - 1] == -1)
+    {
+        cout << "There are no cards in that cell to take!" << endl;
+    }
+    else
+    {
+     // If the player enters a bogus value.
+     if(placeCard != 10 && placeCard != 20 && placeCard != 30 && placeCard != 40)
+     {
+         cout << "Incorrect entry!" << endl;
+     }
+     else
+     { 
+     // cellNum is the position of the cell in the cell array. To find it, the
+     // number entered is divided by ten and subtracted by one. For example, the
+     // player enters '40' for a cell. 40 / 10 = 4, 4 - 1 = 3. It would be cell[3].
+     int cellNum = placeCard / 10 - 1;
+     // 'take' is a simple way of saying 'find the number of cards in the tableau
+     // pile a card is being taken from. 
+     int take = game1.NumCardsInTableau[takeCard - 1];
+     
+     // This if statement prevents the player from entering a card in a cell
+     // that already has a card in it.
+     if (cell[cellNum] != "___")
+     {
+         cout << "There's already a card in that cell!" << endl << endl;
+     }
+     else
+     {
+         // This if statement is used if the player is moving a card from a cell
+         if (takeCard >= 10 && takeCard <= 40)
+        {
+            cell[cellNum] = cell[takeCard / 10 - 1];
+            cell[takeCard / 10 - 1] = "___";            
+        }
+         // This else statement is used if the player is moving a card from a tableau
+         // pile to a cell. 
+         else
+         {
+          cell[cellNum] = game1.tableau[takeCard - 1][take];   
+          game1.NumCardsInTableau[takeCard - 1] = game1.NumCardsInTableau[takeCard - 1] - 1;
+          game1.tableau[takeCard - 1][take] = "\0"; 
+         }
+     }    
+     }
+    }
+}
+
+// Function to print the cells.
+void CardGen::printCells()
+{    
+    cout << "Cells: ";
+    // 'number' is used to print the number of the cell. '10', '20', '30', etc.
+    int number = 10;
+    for (int c = 0; c < CELL_SIZE; c++)
+    {
+        // if statement used if the cell is empty.
+        if (cell[c] == "___")
+        {
+            cout << number << ". ";
+            cout << "___" << "   ";
+            number = number + 10;
+        }
+        else
+        {
+            cout << number << ". ";
+            cout << cell[c] << "   ";
+            number = number + 10;
+    }   
+  }
+}
+
+// initializes the foundation piles.
+void CardGen::initFoundations()
+{
+    for (int c = 0; c < FOUND_PILES; c++)
+    {
+        foundations[c] = "___";
+    }
+}
+// this function is used if the player is putting a card into a foundation pile.
+void CardGen::fillFoundations(int takeCard, int placeCard, CardGen& game1, CardGen& cells)
+{    
+    // used if the player is attempting to put a 'card' from an empty tableau pile into
+    // the foundation pile.
+    if(game1.NumCardsInTableau[takeCard - 1] == -1)
+    {
+        cout << "There are no cards in that pile to take!" << endl;
+    }
+    else
+    {
+    // if statement is used if the player enters a bogus value.
+    if(placeCard != 100 && placeCard != 200 && placeCard != 300 && placeCard != 400)
+     {
+         cout << "Incorrect entry!" << endl;
+     }
+     else
+     {
+    // The next few lines are copied from the 'cardManip' function. They get information
+    // of the card being put onto the foundation pile, including its rank and suit. 
+    string ranks = "A23456789TJQKEOW";   
+    int rankNumTake = 0;
+    int rankNumPlace = 0;
+    int take = game1.NumCardsInTableau[takeCard - 1]; 
+    int place = game1.NumCardsInTableau[placeCard - 1];
+    int cellNum = placeCard / 100 - 1;
+    string takeSuit;
+    string takeRank;
+    string placeSuit;
+    string placeRank;
+    
+    // if statement used if the player is putting a card from the cells directly
+    // into the foundation piles.
+    if ( takeCard >= 10 && takeCard <= 40)
+    {  
+        takeSuit = cells.cell[takeCard / 10 - 1];
+        takeRank = cells.cell[takeCard / 10 - 1];      
+        takeSuit = takeSuit.at(1);
+        takeRank = takeRank.at(0);  
+        rankNumTake = ranks.find(takeRank);
+    }
+    // used if the player is putting a card from the tableau to the foundation pile.
+    else
+    {
+    takeRank = game1.tableau[takeCard - 1][take];
+    takeSuit = game1.tableau[takeCard - 1][take];
+    takeSuit = takeSuit.at(1);
+    takeRank = takeRank.at(0);
+    rankNumTake = ranks.find(takeRank); 
+    }
+    
+    // These lines get the rank and suit information of the card already in the
+    // foundation pile. It is also copied from the 'cardManip' function, with a 
+    // few modifications to get the info from the foundation pile.
+    placeSuit = foundations[placeCard / 100 - 1];
+    placeRank = foundations[placeCard / 100 - 1];      
+    placeSuit = placeSuit.at(1);
+    placeRank = placeRank.at(0);  
+    rankNumPlace = ranks.find(placeRank);
+    
+    // if statement used if the foundation pile has no cards in it.
+    if (foundations[cellNum] == "___")
+    {
+        // if the player tries to enter a card that is not an Ace, he or she will
+        // get this message.
+        if (rankNumTake != 0)
+        {
+            cout << "The first card on that foundation must be an Ace!" << endl;
+        }
+        // if the player does enter an Ace, this else statement is used.
+        else
+        {
+            // If statement is used if the card being taken is from a cell.
+            if (takeCard >= 10 && takeCard <= 40)
+        {
+           foundations[cellNum] = cells.cell[takeCard / 10 - 1];
+           NumCardsInTableau[placeCard - 1] = NumCardsInTableau[placeCard - 1] + 1; 
+           cells.cell[takeCard / 10 - 1] = "___";
+        }
+            // else statement is used if the card being taken is from the tableau.
+           else
+          {
+           foundations[cellNum] = game1.tableau[takeCard - 1][take];   
+           game1.NumCardsInTableau[takeCard - 1] = game1.NumCardsInTableau[takeCard - 1] - 1;
+           game1.tableau[takeCard - 1][take] = "\0";
+          }
+        }
+    }  
+    // these if statements are used if the pile already has a card on it.
+    // this statement is used if the player tries to put a card that is not
+    // in ascending sequential order on top of the foundation pile.
+    else  if( ( rankNumTake != rankNumPlace + 1 ))
+    {
+        cout << "The cards must be in ascending sequential order!" << endl;
+    }
+    // used if the player puts the wrong suit on.
+    else if (( takeSuit == "S") && (placeSuit != "S"))
+    {
+        cout << "Incorrect Suit!" << endl;
+    }
+    else if (( takeSuit == "D") && (placeSuit != "D"))
+    {
+        cout << "Incorrect Suit!" << endl;
+    }
+    else if (( takeSuit == "C") && (placeSuit != "C"))
+    {
+        cout << "Incorrect Suit!" << endl;
+    }
+    else if (( takeSuit == "H") && (placeSuit != "H"))
+    {
+        cout << "Incorrect Suit!" << endl;
+    }
+    else
+    { 
+     // if the card passes through all the previous if statements, it is finally
+     // put into the foundation pile here. This if statement is used if the card
+     // being put on the foundation was from a cell.
+     if (takeCard >= 10 && takeCard <= 40)
+      {
+        foundations[cellNum] = cells.cell[takeCard / 10 - 1];
+        NumCardsInTableau[placeCard - 1] = NumCardsInTableau[placeCard - 1] + 1; 
+        cells.cell[takeCard / 10 - 1] = "___";
+      } 
+     // used if the card being taken was from the tableau.
+     else
+     {
+     foundations[cellNum] = game1.tableau[takeCard - 1][take];   
+     game1.NumCardsInTableau[takeCard - 1] = game1.NumCardsInTableau[takeCard - 1] - 1;
+     game1.tableau[takeCard - 1][take] = "\0";
+     }
+     
+     
+    }
+    }
+    } 
+     
+}
+
+// This function is used to print the foundation piles.
+void CardGen::printFoundations()
+{    
+    int number = 100;
+    cout << "Foundations: ";
+    for (int c = 0; c < FOUND_PILES; c++)
+    {
+        // if statement used if the foundation pile is empty.
+        if (foundations[c] == "___")
+        {
+            cout << number << ". ";
+            cout << "___" << "   ";
+            number = number + 100;
+        }
+        else
+        {
+            cout << number << ". ";
+            cout << foundations[c] << "   ";
+            number = number + 100;
+        }
+    }   
+}
+
+// This function is used to check if the win condition has been met. To do so,
+// the function checks what cells are empty. For each empty tableau pile, the integer
+// 'tableau' is increased by one. It also checks for each empty cell pile. The
+// integer 'cell' is increased by one for each of these it finds. When 
+// 'tableau' = 8 and 'cell' = 4 (meaning that all of the tableau piles are empty
+// and all of the cells are empty), the win condition has been met.
+void CardGen::checkWin(CardGen cells)
+{
+    int tableau = 0;
+    int cell = 0;
+
+    for ( int c = 0; c < T_SIZE_1; c++)
+    {
+       if (NumCardsInTableau[c] == -1)
+       {
+           tableau++;
+       }
+    }
+    
+    for (int c = 0; c < CELL_SIZE; c++)
+    {
+        if (cells.cell[c] == "___")
+        {
+            cell++;
+        }
+    }
+    
+    // This is displayed when the player wins. The program then exits. 
+    // The wonderful ASCII artwork was found at: http://www.geocities.com/soho/7373/bodypart.htm,
+    // with a little modification by me. 
+    if (tableau == 8 && cell == 4)
+    {
+      cout << "   Victory!    " << endl;
+       cout <<"     _____      " << endl;
+       cout <<"   .'      '.   " << endl;
+       cout <<"   /  o  o  \\ " << endl;   
+       cout <<"  ;          ; " << endl;
+      cout << "  ;  \\     / ; " << endl;
+      cout << "   \\  '---' / " << endl; 
+     cout <<  "    '.____.'  " << endl << endl;
+     cout << "Nicely done, you have won the game! Now exiting game..." << endl << endl;
+     
+        exit(0);
+    }            
+   
+}
+  
